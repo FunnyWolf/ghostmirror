@@ -71,9 +71,7 @@ class WebThread(Thread):  # 继承父类threading.Thread
     @route('/conn/', method='POST')
     def conn():
         """返回所有连接"""
-
         logger.debug("cache_data : {}".format(len(cache_data)))
-
         # 清除已经关闭的连接
         die_client_address = json.loads(b64decodeX(request.forms.get("DATA")).decode("utf-8"))
         for client_address in die_client_address:
@@ -94,7 +92,10 @@ class WebThread(Thread):  # 继承父类threading.Thread
     @staticmethod
     @route('/sync/', method='POST')
     def sync():
+        t1 = time.time()
         client_address = request.forms.get("Client_address")
+        t2 = time.time()
+        logger.debug("request.forms.get time cost : {}".format(t2 - t1))
         try:
             conn = cache_data.get(client_address).get("conn")
         except Exception as E:
@@ -115,7 +116,7 @@ class WebThread(Thread):  # 继承父类threading.Thread
         try:
             conn.sendall(post_get_data)
         except Exception as E:  # socket 已失效
-            logger.exception(E)
+
             logger.warning("CLIENT_ADDRESS:{} Conn send failed".format(client_address))
             tcp_recv_data = INVALID_CONN
             try:
@@ -133,6 +134,7 @@ class WebThread(Thread):  # 继承父类threading.Thread
         logger.debug("CLIENT_ADDRESS:{} POST_RETURN_DATA:{}".format(client_address, tcp_recv_data))
         if len(tcp_recv_data) > 0:
             logger.info("CLIENT_ADDRESS:{} POST_RETURN_LEN:{}".format(client_address, len(tcp_recv_data)))
+
         return b64encodeX(tcp_recv_data)
 
 
@@ -147,10 +149,15 @@ if __name__ == '__main__':
     try:
         LOG_LEVEL = configini.get("TOOL-CONFIG", "LOG_LEVEL")
     except Exception as E:
-        print(E)
         LOG_LEVEL = "INFO"
-
-    logger = get_logger(level=LOG_LEVEL, name="FileLogger")
+    try:
+        no_log_flag = configini.get("ADVANCED-CONFIG", "NO_LOG")
+        if no_log_flag.lower() == "true":
+            logger = get_logger(level=LOG_LEVEL, name="StreamLogger")
+        else:
+            logger = get_logger(level=LOG_LEVEL, name="FileLogger")
+    except Exception as E:
+        logger = get_logger(level=LOG_LEVEL, name="FileLogger")
 
     try:
 

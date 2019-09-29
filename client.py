@@ -39,6 +39,7 @@ class Client(object):
                 r = requests.post(WEBSHELL, data=payload, timeout=3)
                 web_return_data = json.loads(b64decodeX(r.content).decode("utf-8"))
             except Exception as E:
+                logger.error(r.content)
                 logger.warning("Try to connet to server, count {}".format(i))
                 time.sleep(1)
                 continue
@@ -196,7 +197,7 @@ if __name__ == '__main__':
     try:
         SLEEP_TIME = float(configini.get("TOOL-CONFIG", "SLEEP_TIME"))
         if SLEEP_TIME <= 0:
-            SLEEP_TIME = 0.01
+            SLEEP_TIME = 0.1
     except Exception as E:
         logger.exception(E)
         SLEEP_TIME = 0.1
