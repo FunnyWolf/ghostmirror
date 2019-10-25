@@ -27,17 +27,17 @@ from config import *
 
 cache_data = {}
 
-global READ_BUFF_SIZE, LOG_LEVEL, SERVER_LISTEN, LOCAL_LISTEN
+global READ_BUFF_SIZE, LOG_LEVEL, SERVER_LISTEN, LOCAL_LISTEN, SOCKET_TIMEOUT
 
 
 class Servers(BaseRequestHandler):
     def handle(self):
         logger.warning('Got connection from {}'.format(self.client_address))
-        self.request.settimeout(0.1)
+        self.request.settimeout(SOCKET_TIMEOUT)
         key = "{}:{}".format(self.client_address[0], self.client_address[1])
         cache_data[key] = {"conn": self.request}
         while True:
-            time.sleep(10)  # 维持tcp连接
+            time.sleep(3)  # 维持tcp连接
 
 
 class WebThread(Thread):  # 继承父类threading.Thread
@@ -64,6 +64,7 @@ class WebThread(Thread):  # 继承父类threading.Thread
             "READ_BUFF_SIZE": READ_BUFF_SIZE,
             "SERVER_LISTEN": SERVER_LISTEN,
             "LOCAL_LISTEN": LOCAL_LISTEN,
+            "SOCKET_TIMEOUT": SOCKET_TIMEOUT,
         }
         return b64encodeX(json.dumps(data).encode("utf-8"))
 
@@ -92,10 +93,7 @@ class WebThread(Thread):  # 继承父类threading.Thread
     @staticmethod
     @route('/sync/', method='POST')
     def sync():
-        t1 = time.time()
         client_address = request.forms.get("Client_address")
-        t2 = time.time()
-        logger.debug("request.forms.get time cost : {}".format(t2 - t1))
         try:
             conn = cache_data.get(client_address).get("conn")
         except Exception as E:
@@ -113,11 +111,20 @@ class WebThread(Thread):  # 继承父类threading.Thread
             tcp_recv_data = WRONG_DATA
             return b64encodeX(tcp_recv_data)
 
-        try:
-            conn.sendall(post_get_data)
-        except Exception as E:  # socket 已失效
+        send_flag = False
+        for i in range(20):
+            # 发送数据
+            try:
+                conn.sendall(post_get_data)
+                if len(post_get_data) > 0:
+                    logger.info("CLIENT_ADDRESS:{} TCP_SEND_LEN:{}".format(client_address, len(post_get_data)))
+                send_flag = True
+                break
+            except Exception as E:  # socket 已失效
+                logger.debug("CLIENT_ADDRESS:{} Client send failed".format(client_address))
 
-            logger.warning("CLIENT_ADDRESS:{} Conn send failed".format(client_address))
+        if send_flag is not True:
+            logger.warning("CLIENT_ADDRESS:{} Client send failed".format(client_address))
             tcp_recv_data = INVALID_CONN
             try:
                 conn.close()
@@ -126,15 +133,21 @@ class WebThread(Thread):  # 继承父类threading.Thread
                 logger.exception(E)
             return b64encodeX(tcp_recv_data)
 
-        try:
-            tcp_recv_data = conn.recv(READ_BUFF_SIZE)
-        except Exception as E:
-            tcp_recv_data = b""
+        tcp_recv_data = b""
+        for i in range(5):
+            # 读取数据
+            try:
+                tcp_recv_data = conn.recv(READ_BUFF_SIZE)
+                logger.debug("CLIENT_ADDRESS:{} TCP_RECV_DATA:{}".format(client_address, tcp_recv_data))
+                if len(tcp_recv_data) > 0:
+                    logger.info("CLIENT_ADDRESS:{} TCP_RECV_LEN:{}".format(client_address, len(tcp_recv_data)))
+                break
+            except Exception as err:
+                pass
 
         logger.debug("CLIENT_ADDRESS:{} POST_RETURN_DATA:{}".format(client_address, tcp_recv_data))
         if len(tcp_recv_data) > 0:
             logger.info("CLIENT_ADDRESS:{} POST_RETURN_LEN:{}".format(client_address, len(tcp_recv_data)))
-
         return b64encodeX(tcp_recv_data)
 
 
@@ -159,12 +172,18 @@ if __name__ == '__main__':
     except Exception as E:
         logger = get_logger(level=LOG_LEVEL, name="FileLogger")
 
+    # READ_BUFF_SIZE
     try:
-
         READ_BUFF_SIZE = int(configini.get("TOOL-CONFIG", "READ_BUFF_SIZE"))
     except Exception as E:
         logger.exception(E)
         READ_BUFF_SIZE = 10240
+
+    # socket_timeout
+    try:
+        SOCKET_TIMEOUT = float(configini.get("TOOL-CONFIG", "SOCKET_TIMEOUT"))
+    except Exception as E:
+        SOCKET_TIMEOUT = 0.1
 
     # 获取核心参数
     try:

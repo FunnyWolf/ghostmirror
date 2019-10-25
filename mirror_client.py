@@ -16,11 +16,14 @@ try:
     import configparser as conp
 except Exception as E:
     import ConfigParser as conp
-import requests
 
 from config import *
 
-global LOG_LEVEL, SLEEP_TIME, READ_BUFF_SIZE, WEBSHELL, REMOVE_SERVER, TARGET_LISTEN
+global LOG_LEVEL, SLEEP_TIME, READ_BUFF_SIZE, WEBSHELL, REMOVE_SERVER, TARGET_LISTEN, SOCKET_TIMEOUT
+import requests
+from requests.packages.urllib3.exceptions import InsecureRequestWarning
+
+requests.packages.urllib3.disable_warnings(InsecureRequestWarning)
 
 
 class Client(object):
@@ -36,7 +39,7 @@ class Client(object):
         }
         for i in range(10):
             try:
-                r = requests.post(WEBSHELL, data=payload, timeout=3)
+                r = requests.post(WEBSHELL, data=payload, timeout=3, verify=False)
                 web_return_data = json.loads(b64decodeX(r.content).decode("utf-8"))
             except Exception as E:
                 logger.error(r.content)
@@ -45,9 +48,10 @@ class Client(object):
                 continue
             logger.info(" ------------Server Config------------")
             logger.info(
-                "\nLOG_LEVEL: {}\nREAD_BUFF_SIZE: {}\nSERVER_LISTEN: {}\nLOCAL_LISTEN: {}\n".format(
+                "\nLOG_LEVEL: {}\nREAD_BUFF_SIZE: {}\nSERVER_LISTEN: {}\nLOCAL_LISTEN: {}\nSOCKET_TIMEOUT: {}\n".format(
                     web_return_data.get("LOG_LEVEL"), web_return_data.get("READ_BUFF_SIZE"),
-                    web_return_data.get("SERVER_LISTEN"), web_return_data.get("LOCAL_LISTEN")
+                    web_return_data.get("SERVER_LISTEN"), web_return_data.get("LOCAL_LISTEN"),
+                    web_return_data.get("SOCKET_TIMEOUT")
                 ))
 
             logger.info("Connet to server success")
@@ -74,7 +78,7 @@ class Client(object):
             return
 
         try:
-            r = requests.post(WEBSHELL, data=payload)
+            r = requests.post(WEBSHELL, data=payload, verify=False)
             web_return_data = json.loads(b64decodeX(r.content).decode("utf-8"))
         except Exception as E:
             logger.warning("Get server exist socket failed")
@@ -97,7 +101,7 @@ class Client(object):
             if self.cache_data.get(client_address) is None:
                 # 新建对应的连接
                 client = socket.socket(AF_INET, SOCK_STREAM)
-                client.settimeout(0.1)
+                client.settimeout(SOCKET_TIMEOUT)
                 client.connect((TARGET_LISTEN.split(":")[0], int(TARGET_LISTEN.split(":")[1])))
                 logger.warning("CLIENT_ADDRESS:{} Create new tcp socket".format(client_address))
                 self.cache_data[client_address] = {"conn": client, "post_send_cache": b""}
@@ -130,7 +134,7 @@ class Client(object):
             payload["Client_address"] = client_address
 
             try:
-                r = requests.post(WEBSHELL, data=payload)
+                r = requests.post(WEBSHELL, data=payload, verify=False)
             except Exception as E:
                 logger.warning("Post data to webshell failed")
                 continue
@@ -202,8 +206,11 @@ if __name__ == '__main__':
         logger.exception(E)
         SLEEP_TIME = 0.1
 
-    READ_BUFF_SIZE = 10240
-
+    # socket_timeout
+    try:
+        SOCKET_TIMEOUT = float(configini.get("TOOL-CONFIG", "SOCKET_TIMEOUT"))
+    except Exception as E:
+        SOCKET_TIMEOUT = 0.1
     # 获取核心参数
     try:
         WEBSHELL = configini.get("NET-CONFIG", "WEBSHELL")
