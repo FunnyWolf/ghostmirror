@@ -152,12 +152,16 @@ class WebThread(Thread):  # 继承父类threading.Thread
 
 
 if __name__ == '__main__':
+    try:
+        configpath = sys.argv[1]
+    except Exception as E:
+        configpath = "config.ini"
 
-    if os.path.exists("config.ini") is not True:
+    if os.path.exists(configpath) is not True:
         print("Please copy config.ini into same folder!")
         sys.exit(1)
     configini = conp.ConfigParser()
-    configini.read("config.ini")
+    configini.read(configpath)
     # 设置日志级别
     try:
         LOG_LEVEL = configini.get("TOOL-CONFIG", "LOG_LEVEL")

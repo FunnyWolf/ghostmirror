@@ -180,11 +180,18 @@ class Client(object):
 
 
 if __name__ == '__main__':
-    if os.path.exists("config.ini") is not True:
+
+    try:
+        configpath = sys.argv[1]
+    except Exception as E:
+        configpath = "config.ini"
+
+
+    if os.path.exists(configpath) is not True:
         print("Please copy config.ini into same folder!")
         sys.exit(1)
     configini = conp.ConfigParser()
-    configini.read("config.ini")
+    configini.read(configpath)
 
     try:
         LOG_LEVEL = configini.get("TOOL-CONFIG", "LOG_LEVEL")
